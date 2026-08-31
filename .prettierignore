@@ -1,0 +1,13 @@
+# 构建产物与第三方依赖不参与格式化
+.next/
+node_modules/
+out/
+dist/
+public/charting_library/
+
+# 本地代理生成目录不属于交付源码
+docs-tdd/
+output-tdd/
+
+# npm 自动维护锁文件，避免格式化造成无意义的大 diff
+package-lock.json

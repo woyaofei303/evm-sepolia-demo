@@ -1,0 +1,58 @@
+{
+  "name": "web3-jd-learning-lab",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "engines": {
+    "node": ">=22.22.1"
+  },
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test \"src/**/*.test.ts\"",
+    "prepare": "husky"
+  },
+  "dependencies": {
+    "@solana-program/system": "^0.13.0",
+    "@solana-program/token": "^0.15.0",
+    "@solana/kit": "^7.1.1",
+    "@solana/kit-plugin-rpc": "^0.17.0",
+    "@solana/kit-plugin-wallet": "^0.17.0",
+    "@solana/react": "^7.1.1",
+    "@tanstack/react-query": "^5.101.4",
+    "@walletconnect/ethereum-provider": "^2.23.10",
+    "next": "^16.3.1",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "swr": "^2.4.2",
+    "viem": "^2.55.19",
+    "wagmi": "^3.7.6"
+  },
+  "devDependencies": {
+    "@openzeppelin/contracts": "^5.6.1",
+    "@types/node": "^24.10.0",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "@types/use-sync-external-store": "^1.5.0",
+    "eslint": "^9.39.4",
+    "eslint-config-next": "^16.3.1",
+    "eslint-config-prettier": "^10.1.8",
+    "husky": "^9.1.7",
+    "lint-staged": "^17.3.0",
+    "prettier": "^3.9.6",
+    "prettier-plugin-solidity": "^2.4.1",
+    "solc": "^0.8.36",
+    "typescript": "^6.0.2"
+  },
+  "overrides": {
+    "axios": "1.19.0",
+    "solc": {
+      "tmp": "0.2.7"
+    }
+  }
+}

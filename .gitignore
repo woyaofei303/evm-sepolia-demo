@@ -1,0 +1,21 @@
+# 依赖与框架构建产物
+node_modules/
+.next/
+out/
+dist/
+
+# 只保留示例环境变量，不提交本机配置和秘密
+.env
+.env.local
+*.local
+
+# Next.js 与 TypeScript 自动生成文件
+next-env.d.ts
+*.tsbuildinfo
+
+# 代理生成的本地计划和运行产物
+docs-tdd/
+output-tdd/
+
+# npm 锁文件必须保留，确保依赖安装可复现
+!package-lock.json

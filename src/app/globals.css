@@ -1,0 +1,425 @@
+/* 全局设计令牌：统一页面前景色、背景色和系统字体栈。 */
+:root {
+  color: #17201d;
+  background: #edf1ed;
+  font-family:
+    Inter,
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    sans-serif;
+  font-synthesis: none;
+}
+
+/* 基础重置：让所有元素使用可预测的盒模型，并清除浏览器默认外边距。 */
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+/* 主操作按钮使用绿色，次操作按钮使用浅色；禁用态阻止误触。 */
+button {
+  border: 0;
+  border-radius: 8px;
+  padding: 0.72rem 1rem;
+  color: white;
+  background: #16624a;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+button:hover:not(:disabled) {
+  background: #0e4c39;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+button.secondary {
+  color: #174d3d;
+  background: #dce9e3;
+}
+
+/* 单列页面容器限制阅读宽度，并在大屏上保持居中。 */
+main {
+  width: min(860px, calc(100% - 2rem));
+  margin: 0 auto;
+  padding: 4rem 0;
+}
+
+header {
+  margin-bottom: 2rem;
+}
+
+/* 标题使用响应式字号；eyebrow 与 step 共同形成模块编号体系。 */
+h1 {
+  margin: 0.2rem 0 0.6rem;
+  font-size: clamp(2.3rem, 8vw, 4.6rem);
+  line-height: 0.95;
+  letter-spacing: -0.06em;
+}
+
+h2 {
+  margin: 0.2rem 0 1rem;
+  font-size: 1.35rem;
+}
+
+h3 {
+  margin: 0 0 1rem;
+  font-size: 1rem;
+}
+
+p {
+  line-height: 1.55;
+}
+
+.eyebrow,
+.step {
+  color: #16624a;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+/* 警告和学习模块共享卡片外观，警告额外使用橙色左边框。 */
+.warning,
+section {
+  border: 1px solid #d2dad5;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 12px 32px rgb(28 49 40 / 6%);
+}
+
+.warning {
+  margin-bottom: 1rem;
+  padding: 1rem 1.2rem;
+  border-left: 4px solid #c77b1d;
+}
+
+section {
+  margin: 1rem 0;
+  padding: 1.4rem;
+}
+
+/* 区块标题、按钮组和切链提示使用可换行的横向布局。 */
+.section-heading,
+.section-heading > div,
+.actions,
+.chain-alert {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.section-heading {
+  justify-content: space-between;
+}
+
+.section-heading h2 {
+  margin: 0;
+}
+
+.section-heading > div {
+  align-items: baseline;
+}
+
+.wallet-actions {
+  flex-wrap: wrap;
+  margin: 1rem 0;
+}
+
+/* facts 用定义列表表达“标签—链上值”，长地址允许自动换行。 */
+.facts {
+  display: grid;
+  gap: 0.5rem;
+  margin: 1.2rem 0;
+}
+
+.facts div {
+  display: grid;
+  grid-template-columns: 9rem minmax(0, 1fr);
+  gap: 1rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid #edf0ee;
+}
+
+dt {
+  color: #63706a;
+}
+
+dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+/* 表单控件统一使用网格间距和清晰的键盘焦点轮廓。 */
+form,
+label {
+  display: grid;
+  gap: 0.5rem;
+}
+
+form {
+  gap: 1rem;
+}
+
+label {
+  margin-bottom: 1rem;
+  color: #47534e;
+  font-size: 0.92rem;
+  font-weight: 700;
+}
+
+input,
+select,
+textarea {
+  width: 100%;
+  border: 1px solid #cbd3ce;
+  border-radius: 8px;
+  padding: 0.75rem;
+  color: #17201d;
+  background: #fbfcfb;
+}
+
+input:focus,
+select:focus,
+textarea:focus,
+button:focus-visible,
+summary:focus-visible {
+  outline: 3px solid #8fc7b5;
+  outline-offset: 2px;
+}
+
+/* ERC-20 授权与转账在宽屏并列，在移动端由媒体查询改为单列。 */
+.two-column {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  margin: 1rem 0;
+}
+
+.two-column form {
+  align-content: start;
+  padding: 1rem;
+  border: 1px solid #e2e8e4;
+  border-radius: 10px;
+}
+
+/* 教学兑换沿用现有表单卡片，只补充子章节、说明卡和原生复选框需要的最小布局。 */
+.learning-swap {
+  margin-top: 1.5rem;
+  padding-top: 1.5rem;
+  border-top: 2px solid #dce9e3;
+}
+
+.teaching-card {
+  padding: 1rem;
+  border: 1px solid #e2e8e4;
+  border-radius: 10px;
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: flex-start;
+}
+
+.checkbox-label input {
+  width: auto;
+  margin-top: 0.2rem;
+}
+
+/* 状态色与反馈容器：muted 为说明，error 为失败，chain-alert 为错误网络。 */
+.muted {
+  color: #63706a;
+}
+
+.mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.84rem;
+  overflow-wrap: anywhere;
+}
+
+.error {
+  color: #a32727;
+  font-weight: 700;
+}
+
+.chain-alert {
+  justify-content: space-between;
+  margin-top: 1rem;
+  padding: 0.8rem;
+  border-radius: 9px;
+  color: #712a18;
+  background: #fff0e7;
+}
+
+/* EVM 与 Solana 共用生命周期卡片，状态点提供快速视觉提示。 */
+.lifecycle {
+  margin-top: 1rem;
+  padding: 0.8rem 1rem;
+  border-radius: 9px;
+  background: #f4f7f5;
+}
+
+.lifecycle p {
+  margin: 0.25rem 0;
+}
+
+.status-dot {
+  display: inline-block;
+  width: 0.55rem;
+  height: 0.55rem;
+  margin-right: 0.35rem;
+  border-radius: 50%;
+  background: #28a36f;
+}
+
+.result {
+  display: block;
+  margin-top: 1rem;
+  padding: 0.8rem;
+  border-radius: 8px;
+  background: #eef8f3;
+}
+
+/* 行情列表只展示紧凑的时间—价格对，并用分隔线提高扫描性。 */
+.ticker-list {
+  margin: 1rem 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ticker-list li {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.45rem 0;
+  border-bottom: 1px solid #edf0ee;
+}
+
+/* Advanced Charts 独占整行；盘口仍保持原生表格。 */
+.market-terminal {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.8rem;
+}
+
+.market-pane {
+  min-width: 0;
+  padding: 1rem;
+  border: 1px solid #e2e8e4;
+  border-radius: 10px;
+  background: #fbfcfb;
+}
+
+.market-chart-pane {
+  grid-column: 1 / -1;
+}
+
+.tradingview-chart {
+  width: 100%;
+  height: 460px;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #fff;
+}
+
+.positive {
+  color: #16835e;
+}
+
+.negative {
+  color: #b33b3b;
+}
+
+.table-scroll {
+  overflow-x: auto;
+}
+
+.market-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+  font-size: 0.78rem;
+  text-align: right;
+}
+
+.market-table th,
+.market-table td {
+  padding: 0.35rem;
+  border-bottom: 1px solid #edf0ee;
+}
+
+.market-table th {
+  color: #63706a;
+  font-weight: 600;
+}
+
+/* details 承载补充概念，footer 承载全局运行限制，不干扰主操作流。 */
+details {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid #edf0ee;
+}
+
+summary {
+  cursor: pointer;
+  font-weight: 700;
+}
+
+a {
+  color: #126047;
+}
+
+code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+footer {
+  padding: 1rem;
+  color: #63706a;
+  font-size: 0.85rem;
+}
+
+/* 窄屏把横向布局折叠为单列，保证按钮、地址和表单仍可操作。 */
+@media (max-width: 600px) {
+  main {
+    padding: 2rem 0;
+  }
+
+  .section-heading,
+  .chain-alert {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .facts div,
+  .two-column,
+  .market-terminal {
+    grid-template-columns: 1fr;
+    gap: 0.25rem;
+  }
+
+  .market-chart-pane {
+    grid-column: auto;
+  }
+
+  .actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}
