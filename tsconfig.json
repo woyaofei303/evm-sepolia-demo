@@ -1,0 +1,38 @@
+{
+  // Next.js 客户端项目：严格检查源码、使用 Bundler 解析，并且只做类型检查不输出文件。
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["DOM", "DOM.Iterable", "ESNext"],
+    "allowImportingTsExtensions": true,
+    "allowSyntheticDefaultImports": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "isolatedModules": true,
+    "incremental": true,
+    "jsx": "react-jsx",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "noEmit": true,
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "types": ["node"],
+    "plugins": [
+      {
+        // 让 TypeScript 语言服务理解 Next.js App Router 约定。
+        "name": "next"
+      }
+    ],
+    "allowJs": true
+  },
+  // 只把应用源码和 Next.js 生成的路由类型作为项目根文件。
+  "include": [
+    "next-env.d.ts",
+    ".next/types/**/*.ts",
+    "src/**/*.ts",
+    "src/**/*.tsx",
+    ".next/dev/types/**/*.ts"
+  ],
+  // 第三方依赖通过声明文件消费，不直接检查 node_modules 源码。
+  "exclude": ["node_modules"]
+}
