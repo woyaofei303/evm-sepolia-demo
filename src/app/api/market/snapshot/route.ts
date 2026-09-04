@@ -1,31 +1,32 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 
-const PRODUCT_URL = 'https://api.exchange.coinbase.com/products/ETH-USD'
+import {
+  isMarketResolution,
+  type MarketResolution,
+} from '../../../../features/market/marketData'
+import {
+  readOkxBook,
+  readOkxCandles,
+} from '../../../../features/market/okxServer'
 
-async function readPublicJson(path: string) {
-  try {
-    const response = await fetch(`${PRODUCT_URL}/${path}`, {
-      cache: 'no-store',
-      headers: { accept: 'application/json' },
-      signal: AbortSignal.timeout(8_000),
-    })
-    return response.ok ? ((await response.json()) as unknown) : null
-  } catch {
-    return null
-  }
-}
-
-export async function GET() {
-  const [candles, book] = await Promise.all([
-    readPublicJson('candles?granularity=60'),
-    readPublicJson('book?level=2'),
+export async function GET(request: NextRequest) {
+  const candidate = request.nextUrl.searchParams.get('resolution') ?? '1'
+  const resolution: MarketResolution = isMarketResolution(candidate)
+    ? candidate
+    : '1'
+  const [bookResult, candleResult] = await Promise.allSettled([
+    readOkxBook(),
+    readOkxCandles(resolution, undefined, 1),
   ])
+  const book = bookResult.status === 'fulfilled' ? bookResult.value : undefined
+  const latestCandle =
+    candleResult.status === 'fulfilled' ? candleResult.value.at(-1) : undefined
 
   return NextResponse.json(
-    { book, candles },
+    { book, latestCandle },
     {
       headers: { 'cache-control': 'no-store' },
-      status: candles || book ? 200 : 502,
+      status: book || latestCandle ? 200 : 502,
     },
   )
 }

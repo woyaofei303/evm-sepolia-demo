@@ -255,7 +255,7 @@ export function CounterContractStep() {
         “部署合约”是把 Counter 字节码写入 Sepolia，部署交易确认后才会产生合约地址。
         未配置时，下方 hooks 的 enabled 为 false，页面不会向空地址发 RPC 请求。
       */}
-      <span className="step">04</span>
+      <span className="step">EVM-04</span>
       <h2>读取、模拟并写入 Counter 合约</h2>
       {!counterAddress ? (
         <p className="muted">

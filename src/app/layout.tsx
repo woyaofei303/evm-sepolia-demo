@@ -6,8 +6,8 @@ import { Providers } from './providers'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'Web3 钱包前端学习实验室',
-  description: '用于学习 EVM、Solana 和实时 Web3 交互的 Next.js 演示',
+  title: 'Web3 钱包与行情实验室',
+  description: 'EVM、Solana、Sui 与实时合约行情的 Next.js 演示',
 }
 
 // lang 帮助浏览器与辅助技术按中文处理页面内容。

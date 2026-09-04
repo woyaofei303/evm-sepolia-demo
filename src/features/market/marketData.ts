@@ -1,4 +1,26 @@
-// Market 功能把数据解析与页面放在同一目录；这里只保留展示所需的产品、价格和时间。
+export const MARKET_PRODUCT = 'ETH-USDT-SWAP'
+
+export const MARKET_RESOLUTIONS = [
+  '1S',
+  '1',
+  '3',
+  '5',
+  '15',
+  '30',
+  '60',
+  '120',
+  '240',
+  '720',
+  '1D',
+  '3D',
+  '1W',
+  '12M',
+] as const
+
+export type MarketResolution = (typeof MARKET_RESOLUTIONS)[number]
+export type MarketMode = 'live' | 'mock'
+export type MarketPerformanceMode = 'realtime' | 'throttled' | 'saver'
+
 export type MarketTick = {
   product: string
   price: number
@@ -37,11 +59,9 @@ export type Candle = {
   low: number
   close: number
   volume: number
-  firstTradeAt: number
-  lastTradeAt: number
 }
 
-export type CoinbaseMessage =
+export type OkxMessage =
   | { type: 'ticker'; tick: MarketTick }
   | { type: 'trades'; trades: MarketTrade[] }
   | {
@@ -50,106 +70,269 @@ export type CoinbaseMessage =
       replace: boolean
       updates: BookUpdate[]
     }
-
-export type MarketMode = 'live' | 'mock'
+  | { type: 'candle'; candle: Candle; channel: string }
 
 export type MarketStreamState = {
   book: OrderBook
-  candles: Candle[]
+  latestCandle?: Candle
+  latestTick?: MarketTick
   metrics: {
+    ackLatencyMs: number
     lastDataAt: number
     messages: number
+    performanceMode: MarketPerformanceMode
     renderBatches: number
+    sequence: number
   }
+  resolution: MarketResolution
   snapshotStatus: string
   status: string
-  ticks: MarketTick[]
   trades: MarketTrade[]
 }
 
 export type MarketWorkerCommand =
-  { type: 'resume' } | { type: 'start'; mode: MarketMode }
+  | { type: 'ack'; latencyMs: number; sequence: number }
+  | { type: 'pause' }
+  | { type: 'pressure' }
+  | { type: 'resolution'; resolution: MarketResolution }
+  | { type: 'resume' }
+  | { type: 'start'; mode: MarketMode }
 
 export type MarketWorkerEvent = {
+  sentAt: number
+  sequence: number
   state: MarketStreamState
   type: 'state'
 }
 
-/** Coinbase REST candles: [time, low, high, open, close, volume]. */
-export function parseCoinbaseCandlesSnapshot(
-  payload: unknown,
-  limit = 300,
-): Candle[] {
-  if (!Array.isArray(payload)) return []
-
-  return payload
-    .flatMap((row) => {
-      if (!Array.isArray(row) || row.length < 6) return []
-      const [time, low, high, open, close, volume] = row.map(Number)
-      if (
-        ![time, low, high, open, close, volume].every(Number.isFinite) ||
-        time < 0 ||
-        low <= 0 ||
-        high < low ||
-        open < low ||
-        open > high ||
-        close < low ||
-        close > high ||
-        volume < 0
-      )
-        return []
-      const start = time * 1_000
-      return [
-        {
-          close,
-          firstTradeAt: start,
-          high,
-          lastTradeAt: start,
-          low,
-          open,
-          start,
-          volume,
-        } satisfies Candle,
-      ]
-    })
-    .toSorted((left, right) => left.start - right.start)
-    .slice(-Math.max(1, limit))
+const OKX_BARS: Record<MarketResolution, string> = {
+  '1S': '1s',
+  '1': '1m',
+  '3': '3m',
+  '5': '5m',
+  '15': '15m',
+  '30': '30m',
+  '60': '1H',
+  '120': '2H',
+  '240': '4H',
+  '720': '12Hutc',
+  '1D': '1Dutc',
+  '3D': '3Dutc',
+  '1W': '1Wutc',
+  // OKX 没有 1 年 K 线；历史和实时都以 UTC 月线聚合。
+  '12M': '1Mutc',
 }
 
-/** Coinbase REST level=2 book becomes the worker's full replacement snapshot. */
-export function parseCoinbaseBookSnapshot(
+export function isMarketResolution(value: unknown): value is MarketResolution {
+  return MARKET_RESOLUTIONS.includes(value as MarketResolution)
+}
+
+export function toOkxBar(resolution: MarketResolution): string {
+  return OKX_BARS[resolution]
+}
+
+export function toOkxCandleChannel(resolution: MarketResolution): string {
+  return `candle${toOkxBar(resolution)}`
+}
+
+function parseCandleRow(row: unknown): Candle | undefined {
+  if (!Array.isArray(row) || row.length < 6) return
+  const [start, open, high, low, close, volume] = row.slice(0, 6).map(Number)
+  if (
+    ![start, open, high, low, close, volume].every(Number.isFinite) ||
+    start < 0 ||
+    low <= 0 ||
+    high < low ||
+    open < low ||
+    open > high ||
+    close < low ||
+    close > high ||
+    volume < 0
+  )
+    return
+  return { close, high, low, open, start, volume }
+}
+
+function utcYearStart(timestamp: number): number {
+  return Date.UTC(new Date(timestamp).getUTCFullYear(), 0, 1)
+}
+
+export function aggregateYearCandles(candles: readonly Candle[]): Candle[] {
+  const years = new Map<number, Candle>()
+  for (const candle of candles.toSorted(
+    (left, right) => left.start - right.start,
+  )) {
+    const start = utcYearStart(candle.start)
+    const current = years.get(start)
+    years.set(
+      start,
+      current
+        ? {
+            ...current,
+            close: candle.close,
+            high: Math.max(current.high, candle.high),
+            low: Math.min(current.low, candle.low),
+            volume: current.volume + candle.volume,
+          }
+        : { ...candle, start },
+    )
+  }
+  return [...years.values()]
+}
+
+/** OKX REST/WS K 线均为 [ts,o,h,l,c,vol,...]，接口默认倒序返回。 */
+export function parseOkxCandles(
+  payload: unknown,
+  resolution: MarketResolution,
+): Candle[] {
+  const rows =
+    payload && typeof payload === 'object'
+      ? (payload as { data?: unknown }).data
+      : payload
+  if (!Array.isArray(rows)) return []
+  const candles = rows
+    .flatMap((row) => {
+      const candle = parseCandleRow(row)
+      return candle ? [candle] : []
+    })
+    .toSorted((left, right) => left.start - right.start)
+  return resolution === '12M' ? aggregateYearCandles(candles) : candles
+}
+
+function parseBookRows(
+  rows: unknown,
+  side: BookUpdate['side'],
+  time: string,
+): BookUpdate[] {
+  if (!Array.isArray(rows)) return []
+  return rows.flatMap((row) => {
+    if (!Array.isArray(row) || row.length < 2) return []
+    const price = Number(row[0])
+    const quantity = Number(row[1])
+    return Number.isFinite(price) &&
+      Number.isFinite(quantity) &&
+      price > 0 &&
+      quantity >= 0
+      ? [{ price, quantity, side, time }]
+      : []
+  })
+}
+
+export function parseOkxBookSnapshot(
   payload: unknown,
   limit = 100,
 ): BookSnapshot | undefined {
   if (!payload || typeof payload !== 'object') return
-  const data = payload as Record<string, unknown>
-  if (
-    !Array.isArray(data.asks) ||
-    !Array.isArray(data.bids) ||
-    typeof data.time !== 'string'
-  )
-    return
-
-  const parseSide = (rows: unknown[], side: BookUpdate['side']) =>
-    rows.flatMap((row) => {
-      if (!Array.isArray(row) || row.length < 2) return []
-      const price = Number(row[0])
-      const quantity = Number(row[1])
-      return Number.isFinite(price) &&
-        Number.isFinite(quantity) &&
-        price > 0 &&
-        quantity > 0
-        ? [{ price, quantity, side, time: data.time as string }]
-        : []
-    })
-
+  const row = (payload as { data?: unknown[] }).data?.[0]
+  if (!row || typeof row !== 'object') return
+  const data = row as { asks?: unknown; bids?: unknown; ts?: unknown }
+  if (typeof data.ts !== 'string') return
+  const time = new Date(Number(data.ts)).toISOString()
   return {
     book: applyBookUpdates(
       { asks: [], bids: [] },
-      [...parseSide(data.asks, 'offer'), ...parseSide(data.bids, 'bid')],
+      [
+        ...parseBookRows(data.asks, 'offer', time),
+        ...parseBookRows(data.bids, 'bid', time),
+      ],
       limit,
     ),
-    time: data.time,
+    time,
+  }
+}
+
+/** 把 OKX 外部消息收敛为页面唯一信任的数据结构。 */
+export function parseOkxMessage(message: string): OkxMessage | undefined {
+  if (message === 'pong') return
+  try {
+    const payload = JSON.parse(message) as {
+      action?: unknown
+      arg?: { channel?: unknown; instId?: unknown }
+      data?: unknown[]
+    }
+    const channel = payload.arg?.channel
+    const product = payload.arg?.instId
+    if (typeof channel !== 'string' || typeof product !== 'string') return
+
+    if (channel === 'tickers') {
+      const row = payload.data?.at(-1) as
+        { instId?: unknown; last?: unknown; ts?: unknown } | undefined
+      const price = Number(row?.last)
+      const timestamp = Number(row?.ts)
+      if (!Number.isFinite(price) || !Number.isFinite(timestamp)) return
+      return {
+        tick: {
+          price,
+          product: typeof row?.instId === 'string' ? row.instId : product,
+          time: new Date(timestamp).toISOString(),
+        },
+        type: 'ticker',
+      }
+    }
+
+    if (channel === 'trades') {
+      const trades = (payload.data ?? []).flatMap((value) => {
+        const row = value as {
+          instId?: unknown
+          px?: unknown
+          side?: unknown
+          sz?: unknown
+          tradeId?: unknown
+          ts?: unknown
+        }
+        const price = Number(row.px)
+        const size = Number(row.sz)
+        const timestamp = Number(row.ts)
+        if (
+          typeof row.tradeId !== 'string' ||
+          (row.side !== 'buy' && row.side !== 'sell') ||
+          !Number.isFinite(price) ||
+          !Number.isFinite(size) ||
+          !Number.isFinite(timestamp) ||
+          size <= 0
+        )
+          return []
+        return [
+          {
+            id: row.tradeId,
+            price,
+            product: typeof row.instId === 'string' ? row.instId : product,
+            side: row.side,
+            size,
+            time: new Date(timestamp).toISOString(),
+          } satisfies MarketTrade,
+        ]
+      })
+      return trades.length ? { trades, type: 'trades' } : undefined
+    }
+
+    if (channel === 'books') {
+      const updates = (payload.data ?? []).flatMap((value) => {
+        const row = value as { asks?: unknown; bids?: unknown; ts?: unknown }
+        const timestamp = Number(row.ts)
+        if (!Number.isFinite(timestamp)) return []
+        const time = new Date(timestamp).toISOString()
+        return [
+          ...parseBookRows(row.asks, 'offer', time),
+          ...parseBookRows(row.bids, 'bid', time),
+        ]
+      })
+      return updates.length
+        ? {
+            product,
+            replace: payload.action === 'snapshot',
+            type: 'book',
+            updates,
+          }
+        : undefined
+    }
+
+    if (channel.startsWith('candle')) {
+      const candle = parseCandleRow(payload.data?.at(-1))
+      return candle ? { candle, channel, type: 'candle' } : undefined
+    }
+  } catch {
+    return
   }
 }
 
@@ -157,7 +340,7 @@ export function parseCoinbaseBookSnapshot(
 export function applyBookUpdates(
   book: OrderBook,
   updates: readonly BookUpdate[],
-  limit = 12,
+  limit = 100,
 ): OrderBook {
   const applySide = (
     levels: readonly BookLevel[],
@@ -183,189 +366,33 @@ export function applyBookUpdates(
   }
 }
 
-/** 逐笔成交聚合为 OHLCV；迟到消息只修正对应周期，不会覆盖较新的开收盘。 */
-export function updateCandles(
-  candles: readonly Candle[],
-  trade: MarketTrade,
-  intervalMs = 60_000,
-  limit = 30,
-): Candle[] {
-  const tradeAt = Date.parse(trade.time)
-  if (!Number.isFinite(tradeAt) || intervalMs <= 0) return [...candles]
-  const start = Math.floor(tradeAt / intervalMs) * intervalMs
-  const current = candles.find((candle) => candle.start === start)
-  const next = current
-    ? candles.map((candle) =>
-        candle !== current
-          ? candle
-          : {
-              ...candle,
-              close: tradeAt >= candle.lastTradeAt ? trade.price : candle.close,
-              firstTradeAt: Math.min(candle.firstTradeAt, tradeAt),
-              high: Math.max(candle.high, trade.price),
-              lastTradeAt: Math.max(candle.lastTradeAt, tradeAt),
-              low: Math.min(candle.low, trade.price),
-              open: tradeAt < candle.firstTradeAt ? trade.price : candle.open,
-              volume: candle.volume + trade.size,
-            },
-      )
-    : [
-        ...candles,
-        {
-          close: trade.price,
-          firstTradeAt: tradeAt,
-          high: trade.price,
-          lastTradeAt: tradeAt,
-          low: trade.price,
-          open: trade.price,
-          start,
-          volume: trade.size,
-        },
-      ]
-
-  return next
-    .toSorted((left, right) => left.start - right.start)
-    .slice(-Math.max(1, limit))
-}
-
-type CoinbasePayload = {
-  channel?: unknown
-  timestamp?: unknown
-  events?: Array<{
-    product_id?: unknown
-    type?: unknown
-    tickers?: Array<{ product_id?: unknown; price?: unknown }>
-    trades?: Array<{
-      product_id?: unknown
-      price?: unknown
-      size?: unknown
-      side?: unknown
-      time?: unknown
-      trade_id?: unknown
-    }>
-    updates?: Array<{
-      side?: unknown
-      price_level?: unknown
-      new_quantity?: unknown
-      event_time?: unknown
-    }>
-  }>
-}
-
-/** 把外部 WebSocket 的三种频道收敛为页面唯一信任的数据结构。 */
-export function parseCoinbaseMessage(
-  message: string,
-): CoinbaseMessage | undefined {
-  try {
-    const data = JSON.parse(message) as CoinbasePayload
-    const fallbackTime =
-      typeof data.timestamp === 'string'
-        ? data.timestamp
-        : new Date().toISOString()
-
-    if (data.channel === 'ticker') {
-      const tick = parseCoinbaseTicker(message)
-      return tick ? { type: 'ticker', tick } : undefined
-    }
-
-    if (data.channel === 'market_trades') {
-      const trades = (
-        data.events?.flatMap((event) => event.trades ?? []) ?? []
-      ).flatMap((trade) => {
-        const price = Number(trade.price)
-        const size = Number(trade.size)
-        const side =
-          typeof trade.side === 'string' ? trade.side.toLowerCase() : ''
-        if (
-          typeof trade.product_id !== 'string' ||
-          typeof trade.trade_id !== 'string' ||
-          !Number.isFinite(price) ||
-          !Number.isFinite(size) ||
-          size <= 0 ||
-          (side !== 'buy' && side !== 'sell')
-        )
-          return []
-        return [
-          {
-            id: trade.trade_id,
-            price,
-            product: trade.product_id,
-            side,
-            size,
-            time: typeof trade.time === 'string' ? trade.time : fallbackTime,
-          } satisfies MarketTrade,
-        ]
-      })
-      return trades.length ? { type: 'trades', trades } : undefined
-    }
-
-    if (data.channel === 'l2_data') {
-      const event = data.events?.[0]
-      if (typeof event?.product_id !== 'string') return
-      const updates = (event.updates ?? []).flatMap((update) => {
-        const price = Number(update.price_level)
-        const quantity = Number(update.new_quantity)
-        if (
-          (update.side !== 'bid' && update.side !== 'offer') ||
-          !Number.isFinite(price) ||
-          !Number.isFinite(quantity) ||
-          quantity < 0
-        )
-          return []
-        return [
-          {
-            price,
-            quantity,
-            side: update.side,
-            time:
-              typeof update.event_time === 'string'
-                ? update.event_time
-                : fallbackTime,
-          } satisfies BookUpdate,
-        ]
-      })
-      return updates.length
-        ? {
-            type: 'book',
-            product: event.product_id,
-            replace: event.type === 'snapshot',
-            updates,
-          }
-        : undefined
-    }
-  } catch {
-    return
+/** 1 年周期由 OKX 月线聚合；首个实时月线只修正快照，不重复累计成交量。 */
+export function mergeRealtimeCandle(
+  current: Candle | undefined,
+  incoming: Candle,
+  resolution: MarketResolution,
+  previousSource?: Candle,
+): Candle {
+  if (resolution !== '12M') return incoming
+  const start = utcYearStart(incoming.start)
+  if (!current || current.start !== start) return { ...incoming, start }
+  const sameSource = previousSource?.start === incoming.start
+  const sourceInYear =
+    previousSource && utcYearStart(previousSource.start) === start
+  const addedVolume = sameSource
+    ? Math.max(0, incoming.volume - previousSource.volume)
+    : sourceInYear
+      ? incoming.volume
+      : 0
+  return {
+    ...current,
+    close: incoming.close,
+    high: Math.max(current.high, incoming.high),
+    low: Math.min(current.low, incoming.low),
+    volume: current.volume + addedVolume,
   }
 }
 
-/** 解析 Coinbase ticker 消息；心跳、畸形 JSON 和无效价格都返回 undefined。 */
-export function parseCoinbaseTicker(message: string): MarketTick | undefined {
-  try {
-    // 外部 WebSocket 数据属于不可信输入，因此先以 unknown 字段描述边界。
-    const data = JSON.parse(message) as CoinbasePayload
-    const ticker = data.events?.[0]?.tickers?.[0]
-    const price = Number(ticker?.price)
-    // 只接受 ticker 频道、字符串产品 ID 和有限数值价格。
-    if (
-      data.channel !== 'ticker' ||
-      typeof ticker?.product_id !== 'string' ||
-      !Number.isFinite(price)
-    )
-      return
-    return {
-      product: ticker.product_id,
-      price,
-      time:
-        typeof data.timestamp === 'string'
-          ? data.timestamp
-          : new Date().toISOString(),
-    }
-  } catch {
-    return
-  }
-}
-
-/** 追加一个元素并只保留最后 limit 条，防止长连接无限占用内存。 */
 export function appendBounded<T>(
   items: readonly T[],
   item: T,
@@ -374,7 +401,6 @@ export function appendBounded<T>(
   return [...items, item].slice(-Math.max(1, limit))
 }
 
-/** 指数退避重连，最长等待 15 秒，兼顾恢复速度和服务端压力。 */
 export function retryDelay(attempt: number): number {
   return Math.min(1_000 * 2 ** attempt, 15_000)
 }

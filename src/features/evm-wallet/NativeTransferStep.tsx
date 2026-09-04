@@ -80,7 +80,7 @@ export function NativeTransferStep() {
   return (
     <section>
       {/* 输入 → 钱包确认 → 获得 Hash → 等待回执，是一笔链上交易的完整路径。 */}
-      <span className="step">03</span>
+      <span className="step">EVM-03</span>
       <h2>发送 Sepolia 测试 ETH</h2>
       <p className="muted">
         这是一笔真实的 Sepolia

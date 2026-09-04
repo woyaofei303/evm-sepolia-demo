@@ -37,5 +37,13 @@ test('wallet and RPC failures become useful Chinese user messages', () => {
     ),
     'Solana 交易模拟失败，请检查 Devnet SOL 余额、收款地址和 RPC 后重试。',
   )
+  assert.equal(
+    getErrorMessage(
+      new Error('destination matches source'),
+      'Sui Devnet',
+      'Devnet SUI',
+    ),
+    '收款地址不能与当前 Sui Devnet 账户相同，请填写另一个测试钱包地址。',
+  )
   assert.equal(getErrorMessage(null), '未知的钱包或 RPC 错误。')
 })

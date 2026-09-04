@@ -67,7 +67,7 @@ export function EvmWalletStep() {
       {/* 先连接账户，再确认 chainId；两项都正确后才进入后续交易步骤。 */}
       <div className="section-heading">
         <div>
-          <span className="step">01</span>
+          <span className="step">EVM-01</span>
           <h2>连接 EVM 钱包并锁定网络</h2>
         </div>
         {connection.isConnected && (

@@ -3,21 +3,52 @@
 import { useEffect, useRef, useState } from 'react'
 
 import { widget } from '../../../public/charting_library'
-import type { Candle } from './marketData'
-import { createTradingViewDatafeed, oneMinute } from './tradingViewDatafeed'
+import type { ResolutionString } from '../../../public/charting_library'
+import type { Candle, MarketMode, MarketResolution } from './marketData'
+import {
+  createTradingViewDatafeed,
+  defaultResolution,
+  requestMockHistory,
+} from './tradingViewDatafeed'
 
-export function TradingViewChart({ candles }: { candles: readonly Candle[] }) {
+export function TradingViewChart({
+  candle,
+  mode,
+  onResolutionChange,
+  resolution,
+}: {
+  candle?: Candle
+  mode: MarketMode
+  onResolutionChange: (resolution: MarketResolution) => void
+  resolution: MarketResolution
+}) {
   const containerRef = useRef<HTMLDivElement>(null)
-  const [feed] = useState(createTradingViewDatafeed)
-  const ready = candles.length > 0
+  const chartRef = useRef<InstanceType<typeof widget> | null>(null)
+  const chartReadyRef = useRef(false)
+  const resolutionRef = useRef(resolution)
+  const [feed] = useState(() =>
+    createTradingViewDatafeed({
+      loadHistory: mode === 'mock' ? requestMockHistory : undefined,
+      onResolutionChange,
+    }),
+  )
 
   useEffect(() => {
-    feed.update(candles)
-  }, [candles, feed])
+    feed.update(resolution, candle)
+  }, [candle, feed, resolution])
+
+  useEffect(() => {
+    resolutionRef.current = resolution
+    if (chartReadyRef.current) {
+      void chartRef.current
+        ?.activeChart()
+        .setResolution(resolution as ResolutionString)
+    }
+  }, [resolution])
 
   useEffect(() => {
     const container = containerRef.current
-    if (!container || !ready) return
+    if (!container) return
     let ratioTimer: ReturnType<typeof setTimeout> | undefined
 
     const chart = new widget({
@@ -29,19 +60,26 @@ export function TradingViewChart({ candles }: { candles: readonly Candle[] }) {
         'symbol_search_hot_key',
         'volume_force_overlay',
       ],
-      interval: oneMinute,
+      interval: defaultResolution,
       library_path: '/charting_library/',
       loading_screen: {
-        backgroundColor: '#ffffff',
-        foregroundColor: '#16835e',
+        backgroundColor: '#020617',
+        foregroundColor: '#22c55e',
       },
       locale: 'zh',
-      symbol: 'ETH-USD',
-      theme: 'light',
+      symbol: 'ETH-USDT-SWAP',
+      theme: 'dark',
       timezone: 'Etc/UTC',
     })
+    chartRef.current = chart
 
     chart.onChartReady(() => {
+      chartReadyRef.current = true
+      if (resolutionRef.current !== defaultResolution) {
+        void chart
+          .activeChart()
+          .setResolution(resolutionRef.current as ResolutionString)
+      }
       const chartApi = chart.activeChart()
       chartApi.dataReady(() => {
         ratioTimer = setTimeout(() => {
@@ -57,14 +95,17 @@ export function TradingViewChart({ candles }: { candles: readonly Candle[] }) {
     })
 
     return () => {
+      chartReadyRef.current = false
+      chartRef.current = null
       clearTimeout(ratioTimer)
       chart.remove()
+      feed.dispose()
     }
-  }, [feed, ready])
+  }, [feed])
 
   return (
     <div
-      aria-label={`ETH-USD 最近 ${candles.length} 根 1 分钟 K 线`}
+      aria-label="OKX ETH-USDT 永续合约 K 线"
       className="tradingview-chart"
       ref={containerRef}
       role="region"

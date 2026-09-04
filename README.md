@@ -1,19 +1,18 @@
-# Web3 钱包前端学习实验室
+# Web3 钱包与行情实验室
 
 这是一个面向高级前端工程师面试准备的可运行演示，使用 Next.js App
-Router、TypeScript、Wagmi、Viem、TanStack Query 和当前 Solana Kit
-前端库。演示覆盖 EVM Sepolia、可选 WalletConnect/Reown、ERC-20、可真实执行的
-SLT↔Sepolia ETH 教学兑换、实时交易终端，以及 Solana Devnet SOL/SPL Token。
+Router、TypeScript、Wagmi/Viem、Solana Kit、Sui dApp Kit 和 TradingView
+Advanced Charts。页面按 **EVM Sepolia / Solana Devnet / Sui Devnet / 行情**
+四个 Tab 分区，避免不同链的钱包状态和阅读流程混在一起。
 
-> 只使用测试账户、Sepolia 测试 ETH、测试 ERC-20 和 Solana Devnet 测试
-> SOL。不要在本项目、`.env.local`、Remix 或聊天中输入私钥、助记词或主网资金。
+> 只使用测试账户和测试币。不要在本项目、`.env.local`、Remix、终端历史或聊天中输入私钥、助记词或主网资金。
 
 ## 1. 从零开始运行
 
 ### 第 1 步：进入项目目录
 
 ```bash
-cd /Users/julian/Documents/Codex/2026-08-21/web3-wallet-demo/outputs/evm-sepolia-demo
+cd evm-sepolia-demo
 ```
 
 ### 第 2 步：检查 Node.js 和 npm
@@ -55,7 +54,8 @@ npm run dev
 http://localhost:3000
 ```
 
-首次打开时，即使没有安装钱包，也应看到 01 到 07 的所有学习模块。
+首次打开时，即使没有安装钱包，也应看到四个顶部 Tab。只有进入某个 Tab
+才挂载该链或行情模块；离开行情 Tab 会销毁图表、Worker、WebSocket、定时器和监听器。
 
 ### 第 7 步：停止开发服务器
 
@@ -76,6 +76,9 @@ NEXT_PUBLIC_LEARNING_SWAP_ADDRESS=
 NEXT_PUBLIC_SOLANA_RPC_URL=https://api.devnet.solana.com
 NEXT_PUBLIC_SOLANA_TOKEN_MINT=
 NEXT_PUBLIC_SOLANA_TOKEN_SYMBOL=TOKEN
+NEXT_PUBLIC_SUI_RPC_URL=https://fullnode.devnet.sui.io:443
+NEXT_PUBLIC_SUI_COUNTER_PACKAGE_ID=
+NEXT_PUBLIC_SUI_COUNTER_OBJECT_ID=
 NEXT_PUBLIC_MARKET_MODE=live
 ```
 
@@ -91,7 +94,10 @@ NEXT_PUBLIC_MARKET_MODE=live
 8. `NEXT_PUBLIC_SOLANA_RPC_URL`：Solana Devnet RPC，默认使用官方公共 Devnet 地址。
 9. `NEXT_PUBLIC_SOLANA_TOKEN_MINT`：可选 Devnet SPL Token Mint，页面仍可手动修改。
 10. `NEXT_PUBLIC_SOLANA_TOKEN_SYMBOL`：Mint 的展示符号；精度和余额始终从链上读取。
-11. `NEXT_PUBLIC_MARKET_MODE`：`live` 表示使用公开实时行情 WebSocket；`mock` 表示使用确定性的本地模拟数据流。
+11. `NEXT_PUBLIC_SUI_RPC_URL`：Sui Devnet gRPC 地址，默认使用官方公共节点。
+12. `NEXT_PUBLIC_SUI_COUNTER_PACKAGE_ID`：发布 Move 包后得到的 Package ID，也就是不可变代码地址。
+13. `NEXT_PUBLIC_SUI_COUNTER_OBJECT_ID`：发布时 `init` 创建的共享 Counter Object ID，也就是可变链上状态。
+14. `NEXT_PUBLIC_MARKET_MODE`：`live` 使用 OKX `ETH-USDT-SWAP` 公共行情；`mock` 使用确定性本地流。
 
 修改 `.env.local` 后，停止并重新运行开发服务器：
 
@@ -115,9 +121,11 @@ npm run dev
 8. 配置 Sepolia ERC-20，然后完成余额、授权额度、精确授权、撤销授权和代币转账。
 9. 部署并配置 LearningSwap，由 owner 初始化 SLT/ETH 储备。
 10. 完成 SLT→ETH 和 ETH→SLT 的报价、滑点保护、模拟、签名、回执与事件流程。
-11. 检查实时/模拟行情、1 分钟 K 线、Level2 盘口、逐笔成交、数据新鲜度、重连和有界更新。
-12. 连接 Solana Devnet 钱包并完成 SOL 转账、SPL Token/ATA 读取与 TransferChecked。
-13. 运行格式、Lint、类型、测试、构建和 pre-commit 检查。
+11. 在 Solana Devnet Tab 完成 SOL 转账、SPL Token/ATA 读取与 TransferChecked。
+12. 安装 Sui CLI，在 Devnet 构建、测试、发布共享 Counter，记录 Package ID 与 Counter Object ID。
+13. 在 Sui Devnet Tab 完成连接、余额读取、SUI 转账和共享 Counter 递增。
+14. 在行情 Tab 检查 14 个周期、向右拖动加载历史、Level2、逐笔、实时刷新、背压和降级指标。
+15. 运行格式、Lint、类型、测试、构建和 pre-commit 检查。
 
 ## 4. 操作 01：连接 EVM 钱包
 
@@ -519,21 +527,71 @@ RPC 报价只是某一时刻的快照。签名和打包期间储备可能变化�
 
 ## 15. 操作 06：实时行情交易终端
 
-实时模式使用 Coinbase 的公开 ETH-USD REST 与 WebSocket，不需要凭证。浏览器先通过同源 Next.js Route Handler 拉取 300 根 1 分钟 K 线和 Level2 全量盘口，再由 Worker 接续实时数据；Route Handler 只解决 Coinbase REST 的浏览器 CORS，不存储数据。
+实时模式统一使用 OKX 公共 `ETH-USDT-SWAP` 永续合约数据，不需要 API
+Key。历史、ticker、逐笔成交和盘口不会混用不同交易所。
 
-1. 找到 **06 实时行情交易终端**。
-2. 点击 **实时**。
-3. `连接状态` 会显示正在连接或实时数据状态。
-4. 等待 `最新价格` 显示 `ETH-USD` 价格，并检查数据新鲜度。
-5. 查看 TradingView Advanced Charts（`charting_library`）绘制的 1 分钟 OHLCV K 线；Datafeed 通过 `getBars` 提供历史数据，通过 `subscribeBars` 接收 Worker 聚合出的最新周期。
-6. 查看 Level2 买卖盘；WebSocket 的 `snapshot` 会替换 REST 盘口，后续 `update` 按价位覆盖，数量为零的档位会被删除。
-7. 查看最近逐笔成交及买卖方向。
-8. 行情、成交、盘口待处理队列和页面历史都有固定上限，不会无限占用内存。
-9. Web Worker 独立完成消息校验、盘口合并和 K 线聚合，主线程最多每 250ms 接收一次状态快照；`消息 / Worker 推送` 可直接观察两者差异。
-10. WebSocket 断开后会使用指数退避重连，最长等待 15 秒；离线或页面回到前台时会恢复连接。
-11. 切换模式或离开页面时，组件会终止 Worker，浏览器同时回收其中的 socket 和 timer。
+### 15A. 支持周期
 
-如果公司网络阻止 WebSocket，使用模拟模式完成相同界面和性能路径练习。
+顶部周期栏和 Advanced Charts 原生周期菜单支持：
+
+```text
+1s  1m  3m  5m  15m  30m  1h  2h  4h  12h  1D  3D  1week  1year
+```
+
+TradingView 分辨率分别为
+`1S/1/3/5/15/30/60/120/240/720/1D/3D/1W/12M`。OKX
+没有直接的年 K 线，`1year` 由 UTC 月线聚合，不能把一根月线伪装成年线。
+
+### 15B. 历史 K 线与拖动加载
+
+1. 打开 **行情** Tab。
+2. Advanced Charts 调用 Datafeed `getBars`。
+3. `src/app/api/market/candles/route.ts` 校验周期与参数，再代理 OKX
+   `/api/v5/market/history-candles`。
+4. 单次请求最多 300 根，这是 OKX 的单页规则，不是前端总历史限制。
+5. 返回数据按时间升序、去重，并严格排除右边界 `to`。
+6. 向右拖动图表、露出左侧更早区间时，Advanced Charts 会继续调用
+   `getBars`。
+7. 前端不设 7 天、总根数或总页数上限；直到 OKX 返回空数组，Datafeed 才返回
+   `noData: true`。
+8. 历史缓存由 Advanced Charts 自己管理，业务代码不再复制第二份无限增长的历史数组。
+
+### 15C. 实时链路
+
+```text
+OKX public WS   ─ ticker / trades / books ─┐
+OKX business WS ─ 当前周期 candle ──────────┤
+                                            ▼
+Web Worker：校验、盘口合并、队列上限、最新 K 线
+                                            ▼
+单个 in-flight 消息 + sequence
+                                            ▼
+主线程 requestAnimationFrame 合帧 → React commit → ACK
+                                            ▼
+TradingView subscribeBars 只接收匹配周期的最新 OHLCV
+```
+
+Worker 保留 100 档/侧盘口和 200 笔成交；盘口增量收到后直接合并，不建立等待队列。传给 UI
+的只有最优 12 档、最近 8 笔成交、一个 ticker 和一根最新 K
+线。历史数据不走这条实时队列，因此“历史不限总量”和“实时内存有上限”并不冲突。
+
+Worker 同时只允许一个未 ACK 的渲染事件。React 忙时，新到数据覆盖 Worker
+中的旧视觉状态，不会在主线程消息队列里排队。ACK
+延迟或长任务触发后，刷新档位从 250ms 自动降到 500ms 或 1000ms；稳定 10
+秒后逐级恢复。页面显示当前档位、ACK 延迟、原始消息数和渲染批次。
+
+`requestAnimationFrame` 只是主线程最后一道合帧门，不承担 WebSocket
+解析和固定 60Hz 更新。这样既与浏览器绘制节奏对齐，也不会因为后台页暂停 rAF
+而让数据无限排队。
+
+### 15D. 生命周期与兜底
+
+- 页面隐藏、浏览器离线：通知 Worker 暂停，关闭两个 WebSocket，取消重连、快照请求和计时器。
+- 页面重新可见或网络恢复：重新拉取快照，再恢复实时连接。
+- 切换周期：只更换 candle 订阅，ticker/trades/books 保持不变。
+- 切换实时/模拟：终止旧 Worker，重建一条干净数据链。
+- 离开行情 Tab：卸载 Advanced Charts、调用 `chart.remove()`、终止 Worker，清理 rAF、观察器和 Datafeed 请求。
+- 公司网络阻止 OKX：切换 **模拟**，继续验证相同的 Worker、背压和渲染路径。
 
 `public/charting_library/` 复用本机 `web-next` 中的 `CL v27.006` 授权资源。该目录是私有分发包；部署或向第三方分发前，需要确认当前 TradingView Advanced Charts 授权覆盖目标环境。
 
@@ -544,7 +602,7 @@ RPC 报价只是某一时刻的快照。签名和打包期间储备可能变化�
 1. 点击 **模拟**。
 2. `连接状态` 应显示 `确定性的本地模拟数据流`。
 3. 等待本地价格、K 线、盘口和逐笔成交更新。
-4. 确认模拟模式仍显示有限长度的数据，并经过与实时模式相同的批处理路径。
+4. 切换周期，确认模拟历史和最新 K 线同步变化，并经过与实时模式相同的批处理路径。
 
 ### 启动时默认使用模拟模式
 
@@ -557,11 +615,14 @@ NEXT_PUBLIC_MARKET_MODE=mock
 2. 重启开发服务器。
 3. 刷新页面，行情模块应直接进入模拟模式。
 
-模拟模式和实时模式共用同一个解析后状态与有界渲染路径，便于离线测试和浏览器冒烟验证。
+模拟模式的历史和实时数据都在本地生成，便于离线测试和浏览器冒烟验证。
 
 ### 为什么当前不引入 WebAssembly
 
-当前热点是网络消息、JSON 校验、有限档位排序以及主线程渲染调度，Web Worker 已把计算移出主线程；300 根 K 线和 100 档盘口没有足够重的数值计算来抵消 WASM 的数据转换、构建和调试成本。只有性能分析确认 Worker 长时间占用 CPU 或频繁 GC，并且场景扩展到万档深度、指标回测、订单撮合、压缩或密码学计算时，才应针对真实热点做包含 JS/WASM 边界成本的基准测试后引入 Rust/WASM。
+当前热点是网络消息、JSON 校验、有限档位排序和主线程提交，Worker
+已隔离计算，盘口也只有 100 档/侧。WASM
+不会减少 React 提交或结构化克隆成本；只有性能分析确认 Worker
+计算本身成为热点，并扩展到万档深度、回测或密码学计算时再评估。
 
 ## 17. 操作 07：连接 Solana Devnet 钱包
 
@@ -655,7 +716,117 @@ NEXT_PUBLIC_SOLANA_TOKEN_SYMBOL=你的符号
 
 前端会拦截非正数、余额不足和给自己转账。ATA 创建租金及网络费由发送方支付，因此发送方仍需保留少量 Devnet SOL。
 
-## 19. TanStack Query 与 Next.js 提供者结构
+## 19. Sui Devnet：从 Move 源码到页面确认
+
+### 19A. 安装并检查 Sui CLI
+
+按 [Sui 官方安装文档](https://docs.sui.io/) 安装当前 Sui
+CLI。不同系统的安装命令会变化，本仓库只依赖安装后的 `sui` 命令：
+
+```bash
+sui --version
+sui client envs
+sui client addresses
+```
+
+如果还没有 Devnet 环境或测试地址：
+
+```bash
+sui client new-env --alias devnet --rpc https://fullnode.devnet.sui.io:443
+sui client switch --env devnet
+sui client new-address ed25519 demo
+sui client switch --address demo
+sui client active-env
+sui client active-address
+```
+
+已有同名 `devnet` 或已有测试地址时，不要重复创建，直接 `switch`。
+CLI 私钥保存在本机 keystore，不要复制到 `.env.local`。
+
+### 19B. 获取 Devnet SUI
+
+```bash
+sui client faucet
+sui client gas
+```
+
+水龙头限流时稍后重试。页面连接的是浏览器钱包；如果 CLI
+地址和浏览器钱包地址不同，需要分别为两者申请 Devnet SUI。
+
+### 19C. 阅读、构建和测试 Move Counter
+
+先读：
+
+```text
+contracts/sui-counter/Move.toml
+contracts/sui-counter/sources/counter.move
+```
+
+`init` 在发布时创建并共享一个 `Counter`；`increment(&mut Counter)`
+没有管理员能力限制，所以任意测试钱包都能递增。它只演示共享对象并发入口，不包含
+NFT、Coin、DEX 或管理员功能。
+
+```bash
+cd contracts/sui-counter
+sui move build
+sui move test
+```
+
+预期：构建成功，`increments` 测试通过。
+
+### 19D. 发布并取得两个不同 ID
+
+确认当前环境确实是 Devnet 后发布：
+
+```bash
+sui client active-env
+sui client publish --gas-budget 100000000 --json > publish.json
+```
+
+从发布结果读取：
+
+```bash
+jq -r '.objectChanges[] | select(.type == "published") | .packageId' publish.json
+jq -r '.objectChanges[] | select(.type == "created" and (.objectType | endswith("::counter::Counter"))) | .objectId' publish.json
+```
+
+- **Package ID**：Move 代码地址，页面用它组成
+  `<PACKAGE_ID>::counter::increment`。
+- **Counter Object ID**：`init` 创建的共享状态对象，页面把它作为
+  `transaction.object(...)` 传入。
+
+两者不能互换。若 CLI 输出格式变化，直接在发布结果或
+[Suiscan Devnet](https://suiscan.xyz/devnet/home) 中找到 published package 和
+shared `::counter::Counter` created object。
+
+### 19E. 配置并操作页面
+
+回到仓库根目录，在 `.env.local` 填入：
+
+```dotenv
+NEXT_PUBLIC_SUI_RPC_URL=https://fullnode.devnet.sui.io:443
+NEXT_PUBLIC_SUI_COUNTER_PACKAGE_ID=0x你的PackageID
+NEXT_PUBLIC_SUI_COUNTER_OBJECT_ID=0x你的共享CounterObjectID
+```
+
+重启 `npm run dev`，进入 **Sui Devnet** Tab：
+
+1. 使用 Slush、Suiet 等 Wallet Standard 浏览器钱包连接 Devnet 测试账户。
+2. 核对网络、地址和余额。
+3. 输入另一个 Sui Devnet 地址和极小数量，发送测试 SUI。
+4. 等待 Digest 最终确认，再从 Suiscan Devnet 检查交易。
+5. 检查共享 Counter 当前值。
+6. 点击 **Counter +1**，在钱包核对 Move Call。
+7. 确认后页面重新读取同一个 Counter Object，显示新值。
+
+SUI 转账流为：校验地址/金额 → 构造 `Transaction` → 钱包签名执行 →
+`waitForTransaction` → 刷新余额。Counter 流为：读取共享 Object →
+`moveCall` → 钱包签名执行 → 最终确认 → 重读 Object。
+
+> Sui Devnet 可能重置。重置后旧 Package ID、Object ID 和测试币都可能失效；
+> 重新领取 SUI、发布包并更新 `.env.local` 即可。不要把 Devnet ID 当成永久生产配置。
+
+## 20. TanStack Query 与 Next.js 提供者结构
 
 1. `src/app/layout.tsx` 是服务端组件。
 2. `src/app/providers.tsx` 是客户端边界。
@@ -665,8 +836,10 @@ NEXT_PUBLIC_SOLANA_TOKEN_SYMBOL=你的符号
 6. 链上回执成功后，应用使相关查询失效，让余额、授权额度和合约读取刷新。
 7. 应用没有另外复制一份 Wagmi 钱包状态。
 8. Solana 模块通过动态客户端加载并拥有独立 provider，避免 SSR 浏览器 API 和 hydration 问题。
+9. Sui 模块在自己的动态客户端边界中创建 `DAppKitProvider`，并固定单一
+   `devnet` 客户端；三条链不会共享钱包连接状态。
 
-## 20. 交易生命周期如何阅读
+## 21. 交易生命周期如何阅读
 
 对 EVM 原生转账、Counter 和 ERC-20，可按以下顺序判断：
 
@@ -677,9 +850,10 @@ NEXT_PUBLIC_SOLANA_TOKEN_SYMBOL=你的符号
 5. `已确认`：链上回执已返回；还要检查回执状态。
 6. `失败`：钱包、RPC、模拟或链上执行失败。
 
-生产应用还应根据业务风险设置确认深度，并明确处理交易替换和链重组。
+Sui 页面以 `waitForTransaction` 完成最终确认；Solana 页面使用客户端确认结果。
+生产应用还应根据链和业务风险设置确认策略，并明确处理 EVM 交易替换和链重组。
 
-## 21. 错误排查步骤
+## 22. 错误排查步骤
 
 ### 页面没有 EVM 钱包按钮或连接失败
 
@@ -718,8 +892,10 @@ NEXT_PUBLIC_SOLANA_TOKEN_SYMBOL=你的符号
 ### 实时行情无数据
 
 1. 点击 **模拟** 验证本地界面路径。
-2. 检查浏览器或公司网络是否阻止 Coinbase WebSocket。
-3. 查看状态是否正在 backoff 重连。
+2. 检查浏览器或公司网络是否阻止 OKX public/business WebSocket。
+3. 直接访问 `/api/market/candles?resolution=1&limit=2`，确认服务端可访问
+   OKX REST。
+4. 查看状态是否正在指数退避重连。
 
 ### Solana 钱包不可见
 
@@ -729,7 +905,16 @@ NEXT_PUBLIC_SOLANA_TOKEN_SYMBOL=你的符号
 4. 确认扩展允许 localhost。
 5. 如果钱包签名窗口仍显示 `Solana Mainnet`，立即点击取消，不要确认交易。
 
-## 22. 质量检查：每条命令及预期结果
+### Sui Counter 不可用
+
+1. 确认钱包网络是 Sui Devnet。
+2. 检查 Package ID 与 Counter Object ID 没有填反。
+3. 在 Suiscan Devnet 检查 Object 的类型以
+   `::counter::Counter` 结尾且 owner 为 Shared。
+4. Devnet 若已重置，重新发布并更新两个环境变量。
+5. 修改 `.env.local` 后必须重启开发服务器。
+
+## 23. 质量检查：每条命令及预期结果
 
 ### 格式检查
 
@@ -777,7 +962,17 @@ npm run typecheck
 npm test
 ```
 
-预期：17 项测试全部通过，包括钱包错误、SOL/SPL 预检、行情 REST/WS 解析、TradingView Datafeed、Level2、K 线、Counter ABI、Gas 预算、滑点边界、LearningSwap ABI 和 Solidity 编译检查。
+预期：全部测试通过，包括钱包错误、SOL/SPL 预检、OKX REST/WS
+解析、TradingView Datafeed、Level2、年 K 线聚合、Sui Counter JSON、EVM
+Counter ABI、Gas 预算、滑点边界、LearningSwap ABI 和 Solidity 编译检查。
+
+Move 合约使用 Sui CLI 单独验证：
+
+```bash
+cd contracts/sui-counter
+sui move build
+sui move test
+```
 
 ### Next.js 生产构建
 
@@ -819,19 +1014,23 @@ npm audit
 
 不要直接执行盲目的 `npm audit fix --force`；先确认安全公告是否进入生产依赖路径以及升级是否兼容。
 
-## 23. 本演示实际证明的 JD 能力
+## 24. 本演示实际证明的 JD 能力
 
 1. **React、TypeScript、Next.js**：应用路由、服务端/客户端边界、受控表单、类型化 hooks、可安全水合的可选模块。
 2. **EVM 钱包与 RPC**：浏览器扩展 EIP-1193 钱包、可选 WalletConnect、Sepolia 网络锁定、账户/余额/切链。
 3. **智能合约交互**：ABI 类型化读取、写入前模拟、链上回执、事件日志解析和状态刷新。
 4. **ERC-20/DeFi 完整流程**：元数据、余额、精确授权/撤销、转账、资金池初始化、恒定乘积报价、手续费、价格影响、滑点、最低到账、截止时间、Gas 最大支出和双向兑换。
 5. **实时交互体验**：钱包提示、已提交、两次确认、失败、交易哈希、链上历史和区块浏览器。
-6. **实时数据和性能**：Coinbase REST 全量快照与 WebSocket 增量、TradingView 图表、Web Worker、运行时消息校验、ticker/逐笔/Level2、1 分钟 K 线、数据新鲜度、指数退避、有界队列和 250ms 批量推送。
+6. **实时数据和性能**：OKX REST 分页与 public/business WebSocket、14
+   个周期、TradingView Datafeed、Worker、rAF 合帧、ACK
+   背压、长任务降级、生命周期回收、数据新鲜度和有界实时队列。
 7. **Solana**：Wallet Standard、Devnet SOL、SPL Token、Mint/ATA 读取、幂等 ATA 创建、TransferChecked、模拟/签名/发送/确认和独立状态。
-8. **稳定性与安全**：不托管私钥、测试网限制、输入校验、EVM RPC 故障切换与健康状态、错误归一化、禁止盲目重试写交易、缺省配置不崩溃。
-9. **工程质量**：Solidity 本地编译检查、ESLint 扁平配置、Prettier、TypeScript、聚焦测试、Next 生产构建、lint-staged 和 Husky。
+8. **Sui**：当前 dApp Kit、gRPC Devnet 客户端、SUI
+   转账、Package/Object 区分、共享 Move Object 读取与写入。
+9. **稳定性与安全**：不托管私钥、测试网限制、输入校验、EVM RPC 故障切换与健康状态、错误归一化、禁止盲目重试写交易、缺省配置不崩溃。
+10. **工程质量**：Solidity/Move 检查、ESLint、Prettier、TypeScript、聚焦测试、Next 生产构建、lint-staged 和 Husky。
 
-## 24. 本演示只解释、不假装证明的内容
+## 25. 本演示只解释、不假装证明的内容
 
 1. 多交易对路由、真实报价聚合、预言机、MEV/防夹和滑点的生产策略。
 2. LP 份额、任意用户加减流动性、手续费分配、闪电贷和协议治理。
@@ -840,9 +1039,11 @@ npm audit
 5. 大规模前端架构、多团队协作、事故响应、完整本地 EVM 集成测试和正式安全审计。
 6. Rust 和 Solana 链上程序开发。
 
-本项目故意不添加业务后端、数据库、索引器、设计系统、Hardhat/Foundry 工程、Rust 或 WebAssembly；唯一的 Next.js Route Handler 是无状态 CORS 代理，Solidity 只使用最小的 `solc-js` 编译检查。
+本项目故意不添加下单、仓位、保证金、风控、业务数据库、索引器、
+Hardhat/Foundry、Rust 或 WebAssembly。Next.js Route Handler 只做无状态
+OKX REST 代理；Sui Counter 保持单一共享对象示例。
 
-## 25. 面试讲解要点
+## 26. 面试讲解要点
 
 1. 公共读取客户端与需要用户授权的钱包客户端必须分开。
 2. 交易哈希只代表已经广播，链上回执状态才说明执行结果。
@@ -850,31 +1051,55 @@ npm audit
 4. 用户拒绝是正常结果，不是需要自动恢复的异常。
 5. 只缓存可安全重复的读取；确认写入后再使权威状态查询失效。
 6. 不在另一个全局 store 中复制 Wagmi 钱包状态。
-7. 网络数据接收频率和 React 渲染频率应分离，并限制历史数据大小。
-8. EVM 强调链 ID、Gas、nonce 和链上回执；Solana 强调集群、近期区块哈希、账户列表、计算单元和确认级别。
-9. 两条链的用户体验仍遵循：准备 → 模拟/预检 → 签名 → 提交 → 确认 → 状态校准。
+7. 网络接收频率和 React 渲染频率应分离；限制实时队列，但历史 K
+   线按数据源规则分页，不能用总根数硬截断用户查询。
+8. EVM 强调链 ID、Gas、nonce 和回执；Solana 强调集群、账户与确认级别；Sui
+   强调 Package、owned/shared Object 和 PTB。
+9. 三条链的用户体验都遵循：准备 → 预检 → 签名 → 提交 → 确认 → 权威状态校准。
 
-## 26. 主要文件定位
+## 27. 从哪里开始读代码，到哪里结束
+
+建议严格按下面顺序读，能够从入口一路串到外部链和行情源：
 
 ```text
-src/app/layout.tsx                              Next.js 根布局
-src/app/providers.tsx                           Wagmi + TanStack Query 客户端提供者
-src/app/WalletLab.tsx                           学习步骤页面组合器
-src/features/evm-wallet/                        EVM 连接、签名和原生转账
-src/features/counter/                           Counter 页面、ABI 与测试
-src/features/erc20/Erc20Panel.tsx               ERC-20 余额/授权额度/授权/转账
-src/features/learning-swap/                     教学兑换页面、ABI、滑点、说明与测试
-src/app/api/market/snapshot/route.ts            Coinbase REST 同源快照代理
-public/charting_library/                        Advanced Charts CL v27.006 授权静态资源
-src/features/market/TradingViewChart.tsx        Advanced Charts widget 生命周期
-src/features/market/tradingViewDatafeed.ts      Advanced Charts 历史/实时 Datafeed
-src/features/market/marketWorker.ts             REST/WS、聚合、重连和批量推送 Worker
-src/features/market/marketData.ts               行情校验、盘口与 K 线纯逻辑及测试
-src/features/solana/                            Solana 页面、Devnet 客户端与测试
-src/shared/evm/config.ts                        Sepolia RPC 与钱包连接配置
-src/shared/evm/TransactionLifecycle.tsx         通用 EVM 交易生命周期
-src/shared/errors.ts                            钱包与 RPC 错误归一化
-contracts/Counter.sol                           Counter 学习合约
-contracts/LearningToken.sol                     Sepolia SLT 测试代币
-contracts/LearningSwap.sol                      SLT/ETH 恒定乘积教学资金池
+01 package.json / .env.example
+   └─ 依赖、脚本、所有公开配置
+
+02 src/app/page.tsx → layout.tsx → providers.tsx → WalletLab.tsx
+   └─ Next 入口、EVM Query Provider、四个 Tab 与按需挂载
+
+03 EVM Tab
+   ├─ src/shared/evm/config.ts
+   ├─ src/features/evm-wallet/
+   ├─ src/features/counter/ → contracts/Counter.sol
+   └─ src/features/erc20/ → src/features/learning-swap/
+      └─ contracts/LearningToken.sol / LearningSwap.sol
+
+04 Solana Devnet Tab
+   └─ src/features/solana/solanaClient.ts
+      → src/features/solana/SolanaPanel.tsx
+
+05 Sui Devnet Tab
+   ├─ contracts/sui-counter/Move.toml
+   ├─ contracts/sui-counter/sources/counter.move
+   ├─ src/features/sui/suiClient.ts
+   └─ src/features/sui/SuiPanel.tsx
+
+06 行情 Tab
+   ├─ src/features/market/MarketPanel.tsx
+   ├─ src/features/market/TradingViewChart.tsx
+   ├─ src/features/market/tradingViewDatafeed.ts
+   │  └─ src/app/api/market/candles/route.ts → OKX history-candles
+   ├─ src/features/market/marketWorker.ts
+   │  └─ OKX public/business WebSocket
+   ├─ src/app/api/market/snapshot/route.ts → OKX candles/books
+   └─ src/features/market/marketData.ts
+
+07 src/shared/errors.ts → src/**/*.test.ts → .husky/pre-commit
+   └─ 跨链错误、纯逻辑边界和最终质量门
 ```
+
+实际调试也按这个方向：入口状态 → 当前 Tab → 交易/数据适配层 → RPC/WS
+边界 → 纯函数测试。不要从 15MB 的 `public/charting_library/`
+内部源码开始；它是授权静态资源，业务接入点是 `TradingViewChart.tsx` 和
+`tradingViewDatafeed.ts`。

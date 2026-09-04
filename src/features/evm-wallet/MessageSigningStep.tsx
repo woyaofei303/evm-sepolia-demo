@@ -36,7 +36,7 @@ export function MessageSigningStep() {
   return (
     <section>
       {/* 阅读原文 → 请求签名 → 保存签名结果，是最基础的链下签名流程。 */}
-      <span className="step">02</span>
+      <span className="step">EVM-02</span>
       <h2>签名消息</h2>
       <p className="muted">
         这是不消耗 Gas

@@ -18,6 +18,8 @@
     "prepare": "husky"
   },
   "dependencies": {
+    "@mysten/dapp-kit-react": "^2.1.25",
+    "@mysten/sui": "^2.29.0",
     "@solana-program/system": "^0.13.0",
     "@solana-program/token": "^0.15.0",
     "@solana/kit": "^7.1.1",

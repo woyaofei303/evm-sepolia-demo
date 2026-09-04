@@ -1,0 +1,9 @@
+[package]
+name = "sui_counter"
+edition = "2024"
+license = "MIT"
+
+[dependencies]
+
+[addresses]
+sui_counter = "0x0"

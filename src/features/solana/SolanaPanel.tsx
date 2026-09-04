@@ -236,7 +236,7 @@ function SolanaWallet() {
       {/* 07：连接状态、账户信息、转账表单和生命周期都限定在 Solana Devnet。 */}
       <div className="section-heading">
         <div>
-          <span className="step">07</span>
+          <span className="step">SOL-01</span>
           <h2>Solana Devnet 钱包、SOL 与 SPL Token</h2>
         </div>
         {connected && (

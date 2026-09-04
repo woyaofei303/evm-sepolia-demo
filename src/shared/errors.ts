@@ -35,7 +35,7 @@ export function getErrorMessage(
     return `${nativeAsset} 不足，无法支付转账金额和手续费。`
   }
   if (normalized.includes('destination matches source')) {
-    return '收款地址不能与当前 Solana 账户相同，请填写另一个 Devnet 钱包地址。'
+    return `收款地址不能与当前 ${chainName} 账户相同，请填写另一个测试钱包地址。`
   }
   if (normalized.includes('provider not found')) {
     return '未检测到浏览器扩展钱包，请安装或解锁钱包。'

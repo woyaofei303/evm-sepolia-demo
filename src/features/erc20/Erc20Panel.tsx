@@ -285,7 +285,7 @@ export function Erc20Panel() {
         页面入口先检查 token 合约地址。未配置时只显示启用方法，所有读取 hook 的 enabled 都是 false。
         spender 地址只是授权练习所需；不配置 spender 仍可读余额和使用直接 transfer。
       */}
-      <span className="step">05</span>
+      <span className="step">EVM-05</span>
       <h2>ERC-20 与 DeFi 基础操作</h2>
       {!tokenAddress ? (
         <p className="muted">
